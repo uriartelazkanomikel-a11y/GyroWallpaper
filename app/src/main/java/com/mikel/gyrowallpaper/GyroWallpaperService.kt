@@ -14,6 +14,16 @@ import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import kotlin.random.Random
 
+data class Spark(
+    var x: Float,
+    var y: Float,
+    var radius: Float,
+    var depth: Float,     // 0..1, controla intensidad del parallax y velocidad de subida
+    var speedY: Float,    // deriva lenta hacia arriba, como una brasa real
+    var alpha: Int,
+    var warm: Boolean     // true = tono naranja/fuego, false = blanco/chispa fría
+)
+
 /**
  * Live wallpaper: tu imagen (calavera en llamas) como fondo con un ligero
  * efecto parallax al inclinar el móvil, más una capa de chispas/brasas
@@ -53,16 +63,6 @@ class GyroWallpaperService : WallpaperService() {
         private val sparks = mutableListOf<Spark>()
         private val handler = android.os.Handler(android.os.Looper.getMainLooper())
         private val drawRunner = Runnable { drawFrame() }
-
-        data class Spark(
-            var x: Float,
-            var y: Float,
-            var radius: Float,
-            var depth: Float,     // 0..1, controla intensidad del parallax y velocidad de subida
-            var speedY: Float,    // deriva lenta hacia arriba, como una brasa real
-            var alpha: Int,
-            var warm: Boolean     // true = tono naranja/fuego, false = blanco/chispa fría
-        )
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
