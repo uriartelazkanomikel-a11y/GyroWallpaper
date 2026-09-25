@@ -40,10 +40,11 @@ class GyroWallpaperService : WallpaperService() {
 
         // ---------- CONFIG ----------
         private val sparkCount = 55
-        private val bgMaxOffsetPx = 90f      // cuánto se desplaza la imagen de fondo (parallax sutil)
-        private val sparkMaxOffsetPx = 260f  // cuánto se desplazan las chispas (más notorio, primer plano)
-        private val bgZoom = 1.22f           // margen extra de zoom para que el desplazamiento no deje bordes vacíos
-        private val smoothing = 0.12f        // 0..1, más bajo = movimiento más lento y suave
+        private val bgMaxOffsetPx = 150f     // cuánto se desplaza la imagen de fondo (parallax sutil)
+        private val sparkMaxOffsetPx = 420f  // cuánto se desplazan las chispas (más notorio, primer plano)
+        private val bgZoom = 1.35f           // margen extra de zoom para que el desplazamiento no deje bordes vacíos
+        private val smoothing = 0.18f        // 0..1, más bajo = movimiento más lento y suave
+        private val tiltSensitivity = 5.5f   // divisor de la gravedad: más bajo = reacciona con menos inclinación
         // -----------------------------
 
         private lateinit var sensorManager: SensorManager
@@ -163,9 +164,8 @@ class GyroWallpaperService : WallpaperService() {
             when (event.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
                     // values[0] = inclinación izquierda/derecha, values[1] = adelante/atrás
-                    // (rango físico aprox. ±9.8 m/s², lo normalizamos a ±1)
-                    targetTiltX = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
-                    targetTiltY = (event.values[1] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
+                    targetTiltX = (event.values[0] / tiltSensitivity).coerceIn(-1f, 1f)
+                    targetTiltY = (event.values[1] / tiltSensitivity).coerceIn(-1f, 1f)
                 }
             }
         }
