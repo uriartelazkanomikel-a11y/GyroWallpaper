@@ -40,10 +40,10 @@ class GyroWallpaperService : WallpaperService() {
 
         // ---------- CONFIG ----------
         private val sparkCount = 55
-        private val bgMaxOffsetPx = 45f      // cuánto se desplaza la imagen de fondo (parallax sutil)
-        private val sparkMaxOffsetPx = 160f  // cuánto se desplazan las chispas (más notorio, primer plano)
-        private val bgZoom = 1.12f           // margen extra de zoom para que el desplazamiento no deje bordes vacíos
-        private val smoothing = 0.07f        // 0..1, más bajo = movimiento más lento y suave
+        private val bgMaxOffsetPx = 90f      // cuánto se desplaza la imagen de fondo (parallax sutil)
+        private val sparkMaxOffsetPx = 260f  // cuánto se desplazan las chispas (más notorio, primer plano)
+        private val bgZoom = 1.22f           // margen extra de zoom para que el desplazamiento no deje bordes vacíos
+        private val smoothing = 0.12f        // 0..1, más bajo = movimiento más lento y suave
         // -----------------------------
 
         private lateinit var sensorManager: SensorManager
@@ -67,8 +67,7 @@ class GyroWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-            rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-                ?: sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+            rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             rawBitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_flame_skull)
         }
 
@@ -162,13 +161,11 @@ class GyroWallpaperService : WallpaperService() {
 
         override fun onSensorChanged(event: SensorEvent) {
             when (event.sensor.type) {
-                Sensor.TYPE_ROTATION_VECTOR -> {
-                    targetTiltX = event.values[0].coerceIn(-1f, 1f)
-                    targetTiltY = event.values[1].coerceIn(-1f, 1f)
-                }
-                Sensor.TYPE_GYROSCOPE -> {
-                    targetTiltX = (targetTiltX + event.values[1] * 0.05f).coerceIn(-1f, 1f)
-                    targetTiltY = (targetTiltY - event.values[0] * 0.05f).coerceIn(-1f, 1f)
+                Sensor.TYPE_ACCELEROMETER -> {
+                    // values[0] = inclinación izquierda/derecha, values[1] = adelante/atrás
+                    // (rango físico aprox. ±9.8 m/s², lo normalizamos a ±1)
+                    targetTiltX = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
+                    targetTiltY = (event.values[1] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
                 }
             }
         }
