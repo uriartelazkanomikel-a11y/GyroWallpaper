@@ -40,20 +40,28 @@ class GyroWallpaperService : WallpaperService() {
 
         // ---------- CONFIG ----------
         private val sparkCount = 55
-        private val bgMaxOffsetPx = 150f     // cuánto se desplaza la imagen de fondo (parallax sutil)
-        private val sparkMaxOffsetPx = 420f  // cuánto se desplazan las chispas (más notorio, primer plano)
+        private val bgMaxOffsetPx = 150f     // cuánto se desplaza la imagen de fondo (parallax por inclinación)
+        private val sparkMaxOffsetPx = 420f  // cuánto se desplazan las chispas (parallax por inclinación)
         private val bgZoom = 1.35f           // margen extra de zoom para que el desplazamiento no deje bordes vacíos
-        private val smoothing = 0.18f        // 0..1, más bajo = movimiento más lento y suave
-        private val tiltSensitivity = 5.5f   // divisor de la gravedad: más bajo = reacciona con menos inclinación
+        private val smoothing = 0.22f        // 0..1, más alto = reacciona más rápido a la inclinación
+        private val tiltSensitivity = 4f     // divisor de la gravedad: más bajo = reacciona con menos inclinación
+        private val kickGain = 3500f         // fuerza del "empujón" al mover/girar el móvil rápido
+        private val kickMax = 500f           // tope del empujón, en píxeles
+        private val kickFriction = 0.90f      // 0..1, más alto = el empujón tarda más en desvanecerse
         // -----------------------------
 
         private lateinit var sensorManager: SensorManager
-        private var rotationSensor: Sensor? = null
+        private var accelSensor: Sensor? = null
+        private var gyroSensor: Sensor? = null
 
         private var targetTiltX = 0f
         private var targetTiltY = 0f
         private var currentTiltX = 0f
         private var currentTiltY = 0f
+
+        // "Empujón" extra por movimiento/giro rápido (no solo inclinación estática)
+        private var kickX = 0f
+        private var kickY = 0f
 
         private var width = 0
         private var height = 0
@@ -68,7 +76,8 @@ class GyroWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-            rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            accelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            gyroSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
             rawBitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_flame_skull)
         }
 
@@ -106,7 +115,10 @@ class GyroWallpaperService : WallpaperService() {
         }
 
         private fun registerSensor() {
-            rotationSensor?.let {
+            accelSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            }
+            gyroSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
             }
         }
@@ -163,9 +175,16 @@ class GyroWallpaperService : WallpaperService() {
         override fun onSensorChanged(event: SensorEvent) {
             when (event.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
-                    // values[0] = inclinación izquierda/derecha, values[1] = adelante/atrás
+                    // Inclinación estática: hacia dónde tienes el móvil ahora mismo.
+                    // values[0] = izquierda/derecha, values[1] = adelante/atrás
                     targetTiltX = (event.values[0] / tiltSensitivity).coerceIn(-1f, 1f)
                     targetTiltY = (event.values[1] / tiltSensitivity).coerceIn(-1f, 1f)
+                }
+                Sensor.TYPE_GYROSCOPE -> {
+                    // Empujón extra: reacciona a CUALQUIER movimiento/giro, no solo
+                    // a la postura final. values están en rad/s (velocidad angular).
+                    kickX = (kickX + event.values[1] * kickGain * 0.001f).coerceIn(-kickMax, kickMax)
+                    kickY = (kickY - event.values[0] * kickGain * 0.001f).coerceIn(-kickMax, kickMax)
                 }
             }
         }
@@ -180,6 +199,8 @@ class GyroWallpaperService : WallpaperService() {
                 if (canvas != null) {
                     currentTiltX += (targetTiltX - currentTiltX) * smoothing
                     currentTiltY += (targetTiltY - currentTiltY) * smoothing
+                    kickX *= kickFriction
+                    kickY *= kickFriction
                     render(canvas)
                 }
             } finally {
@@ -197,8 +218,8 @@ class GyroWallpaperService : WallpaperService() {
 
             // --- Fondo: tu imagen, con parallax sutil ---
             scaledBitmap?.let { bmp ->
-                val offsetX = currentTiltX * bgMaxOffsetPx
-                val offsetY = -currentTiltY * bgMaxOffsetPx
+                val offsetX = currentTiltX * bgMaxOffsetPx + kickX * 0.35f
+                val offsetY = -currentTiltY * bgMaxOffsetPx + kickY * 0.35f
 
                 val left = ((bmp.width - width) / 2f) - offsetX
                 val top = ((bmp.height - height) / 2f) - offsetY
@@ -225,8 +246,8 @@ class GyroWallpaperService : WallpaperService() {
                     s.x = Random.nextFloat() * width
                 }
 
-                val offsetX = currentTiltX * sparkMaxOffsetPx * s.depth
-                val offsetY = -currentTiltY * sparkMaxOffsetPx * s.depth
+                val offsetX = currentTiltX * sparkMaxOffsetPx * s.depth + kickX * s.depth
+                val offsetY = -currentTiltY * sparkMaxOffsetPx * s.depth + kickY * s.depth
 
                 sparkPaint.color = if (s.warm) Color.parseColor("#FFA53E") else Color.parseColor("#FFF4D6")
                 sparkPaint.alpha = s.alpha
